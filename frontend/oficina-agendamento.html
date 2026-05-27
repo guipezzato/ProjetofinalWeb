@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoFix — Agendamento de Serviços</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #0d0d0d;
+    --surface:  #161616;
+    --surface2: #1f1f1f;
+    --border:   #2a2a2a;
+    --accent:   #ff4500;
+    --accent2:  #ff6b35;
+    --gold:     #f5a623;
+    --text:     #f0ece4;
+    --muted:    #6b6b6b;
+    --success:  #22c55e;
+    --danger:   #ef4444;
+    --info:     #3b82f6;
+  }
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 60px, rgba(255,255,255,.015) 60px, rgba(255,255,255,.015) 61px),
+      repeating-linear-gradient(90deg, transparent, transparent 60px, rgba(255,255,255,.015) 60px, rgba(255,255,255,.015) 61px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  #authScreen {
+    position: fixed; inset: 0; z-index: 500;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+    animation: fadeIn .4s ease;
+  }
+  @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+  .auth-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 40px;
+    width: 100%; max-width: 420px;
+    position: relative; overflow: hidden;
+  }
+  .auth-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2), var(--gold));
+  }
+  .auth-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }
+  .auth-logo-icon {
+    width: 44px; height: 44px; background: var(--accent); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; font-size: 22px;
+  }
+  .auth-logo-text { font-family: 'Bebas Neue', sans-serif; font-size: 30px; letter-spacing: 2px; }
+  .auth-logo-text span { color: var(--accent); }
+  .auth-tabs {
+    display: flex; gap: 4px;
+    background: var(--surface2); border-radius: 10px; padding: 4px; margin-bottom: 28px;
+  }
+  .auth-tab {
+    flex: 1; padding: 9px; text-align: center;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 1px;
+    color: var(--muted); border-radius: 7px; cursor: pointer; transition: all .2s;
+    border: none; background: transparent;
+  }
+  .auth-tab.active { background: var(--accent); color: #fff; }
+  .auth-form { display: flex; flex-direction: column; gap: 14px; }
+  .field-group { display: flex; flex-direction: column; gap: 6px; }
+  .field-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase;
+  }
+  .field-input {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 11px 14px; color: var(--text);
+    font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .field-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,69,0,.12); }
+  .field-input.invalid { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(239,68,68,.12); }
+  .field-error { font-size: 11px; color: var(--danger); display: none; font-family: 'JetBrains Mono', monospace; }
+  .field-error.show { display: block; }
+  .auth-btn {
+    width: 100%; padding: 13px; border-radius: 10px; border: none; cursor: pointer;
+    font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 2px;
+    background: var(--accent); color: #fff; transition: all .2s;
+    display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 6px;
+  }
+  .auth-btn:hover { background: var(--accent2); transform: translateY(-1px); }
+  .auth-btn:active { transform: translateY(0); }
+  .auth-btn:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+    border-radius: 50%; animation: spin .7s linear infinite; display: none;
+  }
+  .spinner.show { display: block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* APP */
+  #app { display: none; }
+
+  /* HEADER */
+  header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(13,13,13,.92); backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 40px; height: 72px;
+  }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon {
+    width: 40px; height: 40px; background: var(--accent); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; font-size: 20px;
+  }
+  .logo-text { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 2px; }
+  .logo-text span { color: var(--accent); }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .user-badge {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    color: var(--muted); letter-spacing: 1px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .user-badge strong { color: var(--accent2); }
+  .logout-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 1px;
+    padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: all .2s; text-transform: uppercase;
+  }
+  .logout-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* HERO */
+  .hero-strip {
+    background: linear-gradient(135deg, #1a0800 0%, #0d0d0d 50%, #0d1a00 100%);
+    border-bottom: 2px solid var(--accent);
+    padding: 48px 40px; position: relative; overflow: hidden; z-index: 1;
+  }
+  .hero-strip::after {
+    content: 'AGENDE JÁ'; font-family: 'Bebas Neue', sans-serif; font-size: 160px;
+    color: rgba(255,69,0,.04); position: absolute; right: -20px; top: 50%;
+    transform: translateY(-50%); pointer-events: none; white-space: nowrap; letter-spacing: 10px;
+  }
+  .hero-strip h1 { font-family: 'Bebas Neue', sans-serif; font-size: 56px; letter-spacing: 3px; line-height: 1; margin-bottom: 8px; }
+  .hero-strip h1 em { font-style: normal; color: var(--accent); }
+  .hero-strip p { color: var(--muted); font-size: 15px; font-weight: 300; letter-spacing: 0.5px; }
+
+  /* MAIN */
+  main {
+    position: relative; z-index: 1;
+    max-width: 1280px; margin: 0 auto; padding: 48px 40px;
+    display: grid; grid-template-columns: 1fr 420px; gap: 32px; align-items: start;
+  }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+  .panel-header {
+    padding: 20px 24px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .panel-title { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 1.5px; }
+  .panel-title .badge {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 400;
+    color: var(--accent); background: rgba(255,69,0,.12);
+    padding: 2px 8px; border-radius: 4px; margin-left: 10px; letter-spacing: 1px;
+  }
+  .panel-body { padding: 24px; }
+  .stats-row { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 20px; flex: 1; min-width: 130px;
+  }
+  .stat-card .val { font-family: 'Bebas Neue', sans-serif; font-size: 36px; color: var(--accent); line-height: 1; }
+  .stat-card .lbl { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; font-family: 'JetBrains Mono', monospace; margin-top: 4px; }
+
+  /* CALENDAR */
+  .calendar-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .calendar-nav button {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    width: 36px; height: 36px; border-radius: 8px; cursor: pointer; font-size: 16px;
+    transition: all .2s; display: flex; align-items: center; justify-content: center;
+  }
+  .calendar-nav button:hover { border-color: var(--accent); color: var(--accent); }
+  .calendar-month { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 2px; }
+  .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-weekday {
+    text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    color: var(--muted); letter-spacing: 1px; padding: 8px 0; text-transform: uppercase;
+  }
+  .cal-day {
+    aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+    border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer;
+    position: relative; border: 1px solid transparent; transition: all .15s;
+  }
+  .cal-day:hover:not(.disabled):not(.empty) { background: var(--surface2); border-color: var(--border); }
+  .cal-day.empty { cursor: default; }
+  .cal-day.disabled { color: var(--muted); cursor: not-allowed; opacity: .4; }
+  .cal-day.today { border-color: var(--gold); color: var(--gold); }
+  .cal-day.selected { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .cal-day.has-appt::after {
+    content: ''; position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%);
+    width: 4px; height: 4px; border-radius: 50%; background: var(--accent2);
+  }
+  .cal-day.selected.has-appt::after { background: #fff; }
+
+  /* TIME SLOTS */
+  .time-section { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border); }
+  .time-label { font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 1px; color: var(--muted); margin-bottom: 14px; }
+  .time-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .time-slot {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 4px; text-align: center; cursor: pointer;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; transition: all .15s;
+  }
+  .time-slot:hover:not(.taken) { border-color: var(--accent); color: var(--accent); }
+  .time-slot.selected { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .time-slot.taken { opacity: .35; cursor: not-allowed; text-decoration: line-through; }
+
+  /* FORM */
+  .form-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    overflow: hidden; position: sticky; top: 88px;
+  }
+  .form-header { padding: 20px 24px; border-bottom: 1px solid var(--border); background: linear-gradient(135deg, rgba(255,69,0,.1), transparent); }
+  .form-body { padding: 24px; }
+  label {
+    display: block; font-size: 11px; font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase;
+    margin-bottom: 6px; margin-top: 16px;
+  }
+  label:first-child { margin-top: 0; }
+  input, select, textarea {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; color: var(--text);
+    font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,69,0,.1); }
+  input.invalid, select.invalid, textarea.invalid { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(239,68,68,.1); }
+  .form-error { font-size: 11px; color: var(--danger); font-family: 'JetBrains Mono', monospace; margin-top: 4px; display: none; }
+  .form-error.show { display: block; }
+  select option { background: var(--surface2); }
+  textarea { resize: none; height: 72px; }
+  .selection-display {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    color: var(--accent); min-height: 42px; display: flex; align-items: center; gap: 8px;
+  }
+  .selection-display.empty { color: var(--muted); font-size: 11px; }
+
+  /* BUTTONS */
+  .btn {
+    width: 100%; padding: 14px; border-radius: 10px; border: none; cursor: pointer;
+    font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 2px;
+    transition: all .2s; margin-top: 20px; display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent2); transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+  .btn-secondary { background: transparent; border: 1px solid var(--border); color: var(--muted); font-size: 14px; letter-spacing: 1px; font-family: 'DM Sans', sans-serif; font-weight: 500; }
+  .btn-secondary:hover { border-color: var(--muted); color: var(--text); }
+
+  /* AGENDA LIST */
+  .agenda-list { display: flex; flex-direction: column; gap: 12px; }
+  .agenda-item {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; display: flex; align-items: center; gap: 16px;
+    transition: border-color .2s; animation: slideIn .3s ease;
+  }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+  .agenda-item:hover { border-color: #333; }
+  .agenda-date-box { background: var(--accent); border-radius: 8px; padding: 8px 10px; text-align: center; min-width: 52px; flex-shrink: 0; }
+  .agenda-date-box .day { font-family: 'Bebas Neue', sans-serif; font-size: 24px; line-height: 1; color: #fff; }
+  .agenda-date-box .month { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: rgba(255,255,255,.8); letter-spacing: 1px; text-transform: uppercase; }
+  .agenda-info { flex: 1; min-width: 0; }
+  .agenda-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .agenda-detail { font-size: 12px; color: var(--muted); margin-top: 2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .chip { font-family: 'JetBrains Mono', monospace; font-size: 10px; background: rgba(255,255,255,.05); border-radius: 4px; padding: 2px 6px; color: var(--gold); }
+  .agenda-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .icon-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; transition: all .15s; }
+  .icon-btn.edit:hover { border-color: var(--gold); background: rgba(245,166,35,.1); }
+  .icon-btn.del:hover  { border-color: var(--danger); background: rgba(239,68,68,.1); }
+
+  /* EMPTY STATE */
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
+  .empty-state .emoji { font-size: 40px; margin-bottom: 12px; }
+  .empty-state p { font-size: 14px; line-height: 1.6; }
+
+  /* MODAL */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,.7); backdrop-filter: blur(4px);
+    z-index: 200; display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity .25s;
+  }
+  .modal-backdrop.open { opacity: 1; pointer-events: all; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 32px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto;
+  }
+  .modal h2 { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 2px; margin-bottom: 20px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+  .modal-actions .btn { margin-top: 0; flex: 1; }
+  .confirm-modal {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 32px; width: 100%; max-width: 360px; text-align: center;
+  }
+  .confirm-modal .confirm-icon { font-size: 40px; margin-bottom: 16px; }
+  .confirm-modal p { color: var(--muted); font-size: 14px; line-height: 1.6; margin-bottom: 4px; }
+  .confirm-modal strong { color: var(--text); }
+
+  /* LOADING */
+  .loading-overlay {
+    position: fixed; inset: 0; background: rgba(13,13,13,.85); backdrop-filter: blur(8px);
+    z-index: 400; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    opacity: 0; pointer-events: none; transition: opacity .25s;
+  }
+  .loading-overlay.show { opacity: 1; pointer-events: all; }
+  .loading-spinner { width: 48px; height: 48px; border: 3px solid rgba(255,69,0,.2); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+  .loading-text { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
+
+  /* TOAST */
+  .toast {
+    position: fixed; bottom: 32px; right: 32px; z-index: 300;
+    background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--success);
+    border-radius: 10px; padding: 14px 20px; font-size: 14px; font-weight: 500; min-width: 260px;
+    transform: translateY(80px); opacity: 0; transition: all .35s cubic-bezier(.34,1.56,.64,1); pointer-events: none;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.error { border-left-color: var(--danger); }
+
+  /* FILTER */
+  .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .filter-btn {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 1px;
+    padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: all .2s; text-transform: uppercase;
+  }
+  .filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .filter-btn:hover:not(.active) { border-color: var(--muted); color: var(--text); }
+  .search-wrap { position: relative; margin-bottom: 16px; }
+  .search-wrap input { padding-left: 36px; font-size: 13px; }
+  .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; pointer-events: none; }
+
+  /* RESPONSIVE */
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; padding: 24px 16px; }
+    .form-card { position: static; }
+    header { padding: 0 16px; }
+    .hero-strip { padding: 32px 16px; }
+    .hero-strip h1 { font-size: 36px; }
+    .hero-strip::after { font-size: 80px; }
+    .time-grid { grid-template-columns: repeat(3, 1fr); }
+    .auth-card { padding: 28px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── AUTH SCREEN ─────────────────────────────────────────────────────── -->
+<div id="authScreen" role="dialog" aria-modal="true" aria-label="Autenticação">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">🔧</div>
+      <div class="auth-logo-text">AUTO<span>FIX</span></div>
+    </div>
+    <div class="auth-tabs" role="tablist">
+      <button class="auth-tab active" id="tabLogin" role="tab" aria-selected="true" onclick="switchTab('login')">ENTRAR</button>
+      <button class="auth-tab" id="tabRegister" role="tab" aria-selected="false" onclick="switchTab('register')">CADASTRAR</button>
+    </div>
+
+    <!-- Login Form -->
+    <form id="loginForm" class="auth-form" novalidate onsubmit="handleLogin(event)">
+      <div class="field-group">
+        <label class="field-label" for="loginEmail">E-mail</label>
+        <input class="field-input" type="email" id="loginEmail" placeholder="seu@email.com" autocomplete="email" required>
+        <span class="field-error" id="loginEmailErr">E-mail inválido.</span>
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="loginPassword">Senha</label>
+        <input class="field-input" type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" required minlength="6">
+        <span class="field-error" id="loginPasswordErr">Senha incorreta ou muito curta.</span>
+      </div>
+      <button type="submit" class="auth-btn" id="loginBtn">
+        <div class="spinner" id="loginSpinner"></div>
+        <span id="loginBtnText">ENTRAR</span>
+      </button>
+    </form>
+
+    <!-- Register Form -->
+    <form id="registerForm" class="auth-form" novalidate onsubmit="handleRegister(event)" style="display:none">
+      <div class="field-group">
+        <label class="field-label" for="regName">Nome completo</label>
+        <input class="field-input" type="text" id="regName" placeholder="João Silva" autocomplete="name" required>
+        <span class="field-error" id="regNameErr">Informe seu nome (mín. 3 caracteres).</span>
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="regEmail">E-mail</label>
+        <input class="field-input" type="email" id="regEmail" placeholder="seu@email.com" autocomplete="email" required>
+        <span class="field-error" id="regEmailErr">E-mail inválido ou já cadastrado.</span>
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="regPassword">Senha</label>
+        <input class="field-input" type="password" id="regPassword" placeholder="Mínimo 6 caracteres" autocomplete="new-password" required minlength="6">
+        <span class="field-error" id="regPasswordErr">A senha deve ter pelo menos 6 caracteres.</span>
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="regPassword2">Confirmar senha</label>
+        <input class="field-input" type="password" id="regPassword2" placeholder="Repita a senha" autocomplete="new-password" required>
+        <span class="field-error" id="regPassword2Err">As senhas não coincidem.</span>
+      </div>
+      <button type="submit" class="auth-btn" id="registerBtn">
+        <div class="spinner" id="registerSpinner"></div>
+        <span id="registerBtnText">CRIAR CONTA</span>
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ── LOADING OVERLAY ─────────────────────────────────────────────────── -->
+<div class="loading-overlay" id="loadingOverlay" aria-live="polite" aria-busy="true">
+  <div class="loading-spinner"></div>
+  <div class="loading-text" id="loadingText">Carregando...</div>
+</div>
+
+<!-- ── APP ────────────────────────────────────────────────────────────── -->
+<div id="app">
+
+  <header role="banner">
+    <div class="logo">
+      <div class="logo-icon" aria-hidden="true">🔧</div>
+      <div class="logo-text">AUTO<span>FIX</span></div>
+    </div>
+    <div class="header-right">
+      <div class="user-badge">
+        <span>👤</span>
+        <span>Olá, <strong id="headerUserName"></strong></span>
+      </div>
+      <button class="logout-btn" onclick="handleLogout()" aria-label="Sair da conta">Sair</button>
+    </div>
+  </header>
+
+  <div class="hero-strip" role="region" aria-label="Bem-vindo">
+    <h1>AGENDE SEU<br><em>SERVIÇO</em></h1>
+    <p>Escolha data e horário disponíveis • Rápido e sem complicação</p>
+  </div>
+
+  <main role="main">
+    <!-- Coluna esquerda -->
+    <div>
+      <section aria-label="Estatísticas" class="stats-row" id="statsRow"></section>
+
+      <section aria-label="Calendário de agendamentos" class="panel" style="margin-bottom:24px">
+        <div class="panel-header">
+          <div class="panel-title">Calendário <span class="badge" id="calMonthBadge"></span></div>
+        </div>
+        <div class="panel-body">
+          <nav class="calendar-nav" aria-label="Navegação mensal">
+            <button onclick="changeMonth(-1)" aria-label="Mês anterior">&#8592;</button>
+            <div class="calendar-month" id="calMonthLabel" aria-live="polite"></div>
+            <button onclick="changeMonth(1)" aria-label="Próximo mês">&#8594;</button>
+          </nav>
+          <div class="calendar-grid" id="calGrid" role="grid" aria-label="Calendário"></div>
+          <div class="time-section" id="timeSection" style="display:none">
+            <div class="time-label" id="timeSectionLabel"></div>
+            <div class="time-grid" id="timeGrid" role="listbox" aria-label="Horários disponíveis"></div>
+          </div>
+        </div>
+      </section>
+
+      <section aria-label="Lista de agendamentos" class="panel">
+        <div class="panel-header">
+          <div class="panel-title">Agendamentos <span class="badge" id="totalBadge">0</span></div>
+        </div>
+        <div class="panel-body">
+          <div class="search-wrap">
+            <span class="search-icon">🔍</span>
+            <input type="search" placeholder="Buscar por nome ou veículo…" id="searchInput" oninput="renderAgenda()" aria-label="Buscar agendamentos">
+          </div>
+          <div class="filter-bar" role="group" aria-label="Filtrar agendamentos">
+            <button class="filter-btn active" onclick="setFilter('all', this)">Todos</button>
+            <button class="filter-btn" onclick="setFilter('today', this)">Hoje</button>
+            <button class="filter-btn" onclick="setFilter('upcoming', this)">Próximos</button>
+            <button class="filter-btn" onclick="setFilter('past', this)">Anteriores</button>
+          </div>
+          <div class="agenda-list" id="agendaList" aria-live="polite"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Coluna direita: formulário -->
+    <aside aria-label="Formulário de agendamento">
+      <div class="form-card">
+        <div class="form-header">
+          <div class="panel-title" id="formTitle">Novo Agendamento</div>
+        </div>
+        <div class="form-body">
+          <label for="dateDisplay">Data Selecionada</label>
+          <div class="selection-display empty" id="dateDisplay" role="status">Clique em um dia no calendário</div>
+
+          <label for="timeDisplay">Horário Selecionado</label>
+          <div class="selection-display empty" id="timeDisplay" role="status">Selecione o horário</div>
+
+          <label for="clientName">Nome do Cliente *</label>
+          <input type="text" id="clientName" placeholder="Ex: João Silva" autocomplete="name" aria-required="true">
+          <div class="form-error" id="errName">Informe o nome do cliente.</div>
+
+          <label for="clientPhone">Telefone</label>
+          <input type="tel" id="clientPhone" placeholder="(11) 99999-9999" autocomplete="tel">
+
+          <label for="clientVehicle">Veículo *</label>
+          <input type="text" id="clientVehicle" placeholder="Ex: Honda Civic 2020" aria-required="true">
+          <div class="form-error" id="errVehicle">Informe o veículo.</div>
+
+          <label for="serviceType">Serviço *</label>
+          <select id="serviceType" aria-required="true">
+            <option value="">— Selecionar —</option>
+            <option>Revisão Geral</option>
+            <option>Troca de Óleo</option>
+            <option>Alinhamento e Balanceamento</option>
+            <option>Freios</option>
+            <option>Suspensão</option>
+            <option>Sistema Elétrico</option>
+            <option>Ar Condicionado</option>
+            <option>Diagnóstico Computadorizado</option>
+            <option>Outros</option>
+          </select>
+          <div class="form-error" id="errService">Selecione o tipo de serviço.</div>
+
+          <label for="obsField">Observações</label>
+          <textarea id="obsField" placeholder="Informe detalhes adicionais…" aria-label="Observações opcionais"></textarea>
+
+          <button class="btn btn-primary" id="submitBtn" onclick="submitForm()" aria-live="polite">
+            <div class="spinner" id="submitSpinner"></div>
+            <span id="submitBtnText">CONFIRMAR AGENDAMENTO</span>
+          </button>
+          <button class="btn btn-secondary" id="cancelEditBtn" onclick="cancelEdit()" style="display:none">Cancelar edição</button>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ── MODAL EDITAR ────────────────────────────────────────────────────── -->
+  <div class="modal-backdrop" id="editModal" role="dialog" aria-modal="true" aria-label="Editar agendamento">
+    <div class="modal">
+      <h2>Editar Agendamento</h2>
+      <label>Data</label>
+      <div class="selection-display" id="editDateDisplay" style="color:var(--text)">—</div>
+      <label>Horário</label>
+      <div id="editTimeGrid" class="time-grid" style="margin-top:0" role="listbox" aria-label="Horários"></div>
+      <label for="editName">Nome do Cliente *</label>
+      <input type="text" id="editName" aria-required="true">
+      <div class="form-error" id="editErrName">Informe o nome.</div>
+      <label for="editPhone">Telefone</label>
+      <input type="tel" id="editPhone">
+      <label for="editVehicle">Veículo *</label>
+      <input type="text" id="editVehicle" aria-required="true">
+      <div class="form-error" id="editErrVehicle">Informe o veículo.</div>
+      <label for="editService">Serviço *</label>
+      <select id="editService" aria-required="true">
+        <option value="">— Selecionar —</option>
+        <option>Revisão Geral</option>
+        <option>Troca de Óleo</option>
+        <option>Alinhamento e Balanceamento</option>
+        <option>Freios</option>
+        <option>Suspensão</option>
+        <option>Sistema Elétrico</option>
+        <option>Ar Condicionado</option>
+        <option>Diagnóstico Computadorizado</option>
+        <option>Outros</option>
+      </select>
+      <div class="form-error" id="editErrService">Selecione o serviço.</div>
+      <label for="editObs">Observações</label>
+      <textarea id="editObs"></textarea>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+        <!-- CORREÇÃO: IDs corrigidos para saveEditBtn / saveSpinner / saveBtnText -->
+        <button class="btn btn-primary" id="saveEditBtn" onclick="saveEdit()">
+          <div class="spinner" id="saveSpinner"></div>
+          <span id="saveBtnText">SALVAR</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MODAL CONFIRMAR EXCLUSÃO ───────────────────────────────────────── -->
+  <div class="modal-backdrop" id="confirmModal" role="dialog" aria-modal="true" aria-label="Confirmar exclusão">
+    <div class="confirm-modal">
+      <div class="confirm-icon">🗑️</div>
+      <p><strong>Excluir agendamento?</strong></p>
+      <p style="margin-top:8px">Esta ação não pode ser desfeita.</p>
+      <div class="modal-actions" style="margin-top:24px">
+        <button class="btn btn-secondary" onclick="closeConfirmModal()">Cancelar</button>
+        <button class="btn btn-primary" id="confirmDeleteBtn" style="background:var(--danger)">EXCLUIR</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /#app -->
+
+<!-- ── TOAST ───────────────────────────────────────────────────────────── -->
+<div class="toast" id="toast" role="alert" aria-live="assertive"></div>
+
+<script>
+"use strict";
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONFIG — URL base da API
+   Troque pela URL do deploy quando publicar (ex: https://seu-app.onrender.com)
+   ═══════════════════════════════════════════════════════════════════════════ */
+const API = 'http://localhost:3000/api';
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SESSION (salva localmente no navegador após login)
+   ═══════════════════════════════════════════════════════════════════════════ */
+const Session = {
+  get()       { return JSON.parse(localStorage.getItem('autofix_session') || 'null'); },
+  save(s)     { localStorage.setItem('autofix_session', JSON.stringify(s)); },
+  clear()     { localStorage.removeItem('autofix_session'); }
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   UTILS
+   ═══════════════════════════════════════════════════════════════════════════ */
+function uid()          { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+function today()        { const d = new Date(); return dateKey(d.getFullYear(), d.getMonth(), d.getDate()); }
+function dateKey(y,m,d) { return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
+function isValidEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
+function isValidPhone(p){ return p === '' || /^\(\d{2}\) \d{4,5}-\d{4}$/.test(p); }
+function escapeHtml(str){ return String(str).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function takenSlots(dateStr, excludeId=null) {
+  return appointments.filter(a => a.date === dateStr && a.id !== excludeId).map(a => a.time);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════════════════════════════════════════ */
+let currentDate      = new Date();
+let viewYear         = currentDate.getFullYear();
+let viewMonth        = currentDate.getMonth();
+let selectedDateStr  = null;
+let selectedTime     = null;
+let editingId        = null;
+let editSelectedTime = null;
+let appointments     = [];
+let currentFilter    = 'all';
+let pendingDeleteId  = null;
+
+const MONTHS       = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const MONTHS_SHORT = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+const WEEKDAYS     = ['DOM','SEG','TER','QUA','QUI','SEX','SÁB'];
+const HOURS        = ['07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30'];
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LOADING / TOAST / BTN
+   ═══════════════════════════════════════════════════════════════════════════ */
+function showLoading(msg='Carregando...') {
+  document.getElementById('loadingText').textContent = msg;
+  document.getElementById('loadingOverlay').classList.add('show');
+}
+function hideLoading() { document.getElementById('loadingOverlay').classList.remove('show'); }
+
+function toast(msg, type='success') {
+  const el = document.getElementById('toast');
+  el.textContent = (type === 'success' ? '✅ ' : '❌ ') + msg;
+  el.className   = 'toast' + (type === 'error' ? ' error' : '') + ' show';
+  setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+function setBtnLoading(btnId, spinnerId, textId, loading, label) {
+  const btn  = document.getElementById(btnId);
+  const spin = document.getElementById(spinnerId);
+  const txt  = document.getElementById(textId);
+  if (btn)  btn.disabled = loading;
+  if (spin) spin.classList.toggle('show', loading);
+  if (txt && label) txt.textContent = label;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   API HELPERS — comunica com o backend Express
+   ═══════════════════════════════════════════════════════════════════════════ */
+async function apiPost(endpoint, body) {
+  const res = await fetch(`${API}${endpoint}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  return res.json();
+}
+
+async function apiFetch(endpoint) {
+  const session = Session.get();
+  const res = await fetch(`${API}${endpoint}`, {
+    headers: { 'user-id': session ? session.id : '' }
+  });
+  return res.json();
+}
+
+async function apiMutate(method, endpoint, body) {
+  const session = Session.get();
+  const res = await fetch(`${API}${endpoint}`, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'user-id': session ? session.id : '' },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  return res.json();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   AUTH
+   ═══════════════════════════════════════════════════════════════════════════ */
+function switchTab(tab) {
+  const isLogin = tab === 'login';
+  document.getElementById('loginForm').style.display    = isLogin ? 'flex' : 'none';
+  document.getElementById('registerForm').style.display = isLogin ? 'none' : 'flex';
+  document.getElementById('tabLogin').classList.toggle('active', isLogin);
+  document.getElementById('tabRegister').classList.toggle('active', !isLogin);
+  clearAuthErrors();
+}
+
+function clearAuthErrors() {
+  document.querySelectorAll('.field-error').forEach(e => e.classList.remove('show'));
+  document.querySelectorAll('.field-input').forEach(e => e.classList.remove('invalid'));
+}
+
+function showFieldError(inputId, errId, show=true) {
+  document.getElementById(inputId).classList.toggle('invalid', show);
+  document.getElementById(errId).classList.toggle('show', show);
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  clearAuthErrors();
+  const email    = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  let valid = true;
+  if (!isValidEmail(email)) { showFieldError('loginEmail','loginEmailErr'); valid = false; }
+  if (password.length < 6)  { showFieldError('loginPassword','loginPasswordErr'); valid = false; }
+  if (!valid) return;
+
+  setBtnLoading('loginBtn','loginSpinner','loginBtnText', true, 'ENTRANDO...');
+  try {
+    const data = await apiPost('/auth/login', { email, password });
+    if (!data.session) {
+      showFieldError('loginEmail','loginEmailErr');
+      document.getElementById('loginPasswordErr').textContent = data.msg || 'Credenciais inválidas.';
+      showFieldError('loginPassword','loginPasswordErr');
+      toast(data.msg || 'Credenciais inválidas.', 'error');
+    } else {
+      Session.save(data.session);
+      initApp(data.session);
+    }
+  } catch {
+    toast('Erro ao conectar com o servidor.', 'error');
+  } finally {
+    setBtnLoading('loginBtn','loginSpinner','loginBtnText', false, 'ENTRAR');
+  }
+}
+
+async function handleRegister(e) {
+  e.preventDefault();
+  clearAuthErrors();
+  const name = document.getElementById('regName').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  const pw  = document.getElementById('regPassword').value;
+  const pw2 = document.getElementById('regPassword2').value;
+  let valid = true;
+  if (name.length < 3)      { showFieldError('regName','regNameErr'); valid = false; }
+  if (!isValidEmail(email)) { showFieldError('regEmail','regEmailErr'); valid = false; }
+  if (pw.length < 6)        { showFieldError('regPassword','regPasswordErr'); valid = false; }
+  if (pw !== pw2)           { showFieldError('regPassword2','regPassword2Err'); valid = false; }
+  if (!valid) return;
+
+  setBtnLoading('registerBtn','registerSpinner','registerBtnText', true, 'CRIANDO...');
+  try {
+    const data = await apiPost('/auth/register', { name, email, password: pw });
+    if (data.msg && data.msg.includes('sucesso')) {
+      toast('Conta criada! Faça login.');
+      switchTab('login');
+      document.getElementById('loginEmail').value = email;
+    } else {
+      showFieldError('regEmail','regEmailErr');
+      document.getElementById('regEmailErr').textContent = data.msg || 'Erro ao cadastrar.';
+      toast(data.msg || 'Erro ao cadastrar.', 'error');
+    }
+  } catch {
+    toast('Erro ao conectar com o servidor.', 'error');
+  } finally {
+    setBtnLoading('registerBtn','registerSpinner','registerBtnText', false, 'CRIAR CONTA');
+  }
+}
+
+function handleLogout() {
+  showLoading('Saindo...');
+  setTimeout(() => {
+    Session.clear();
+    appointments = [];
+    hideLoading();
+    document.getElementById('app').style.display = 'none';
+    const auth = document.getElementById('authScreen');
+    auth.style.display    = 'flex';
+    auth.style.animation  = 'fadeIn .4s ease';
+    switchTab('login');
+    clearAllFormFields();
+  }, 400);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   APP INIT
+   ═══════════════════════════════════════════════════════════════════════════ */
+async function initApp(session) {
+  showLoading('Carregando agenda...');
+  document.getElementById('headerUserName').textContent = session.name.split(' ')[0];
+  try {
+    const data = await apiFetch('/appointments');
+    appointments = Array.isArray(data) ? data : [];
+  } catch {
+    appointments = [];
+  }
+  const auth = document.getElementById('authScreen');
+  auth.style.animation = 'fadeOut .3s ease forwards';
+  setTimeout(() => {
+    auth.style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    hideLoading();
+    renderAll();
+  }, 300);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RENDER
+   ═══════════════════════════════════════════════════════════════════════════ */
+function renderStats() {
+  const total      = appointments.length;
+  const todayStr   = today();
+  const todayCount = appointments.filter(a => a.date === todayStr).length;
+  const monthStr   = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}`;
+  const thisMonth  = appointments.filter(a => a.date.startsWith(monthStr)).length;
+  const upcoming   = appointments.filter(a => a.date > todayStr).length;
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-card"><div class="val">${total}</div><div class="lbl">Total</div></div>
+    <div class="stat-card"><div class="val">${todayCount}</div><div class="lbl">Hoje</div></div>
+    <div class="stat-card"><div class="val">${thisMonth}</div><div class="lbl">Este Mês</div></div>
+    <div class="stat-card"><div class="val">${upcoming}</div><div class="lbl">Próximos</div></div>`;
+  document.getElementById('totalBadge').textContent = total;
+}
+
+function renderCalendar() {
+  document.getElementById('calMonthLabel').textContent = `${MONTHS[viewMonth]} ${viewYear}`;
+  document.getElementById('calMonthBadge').textContent = MONTHS_SHORT[viewMonth];
+  const grid       = document.getElementById('calGrid');
+  const firstDay   = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth= new Date(viewYear, viewMonth+1, 0).getDate();
+  const todayStr   = today();
+  let html = WEEKDAYS.map(w => `<div class="cal-weekday">${w}</div>`).join('');
+  for (let i=0; i<firstDay; i++) html += `<div class="cal-day empty" aria-hidden="true"></div>`;
+  for (let d=1; d<=daysInMonth; d++) {
+    const key       = dateKey(viewYear, viewMonth, d);
+    const isPast    = key < todayStr;
+    const isToday   = key === todayStr;
+    const isSel     = key === selectedDateStr;
+    const hasAppt   = appointments.some(a => a.date === key);
+    const dow       = new Date(viewYear, viewMonth, d).getDay();
+    const isDisabled= isPast || dow === 0 || dow === 6;
+    let cls = 'cal-day';
+    if (isDisabled) cls += ' disabled';
+    if (isToday)    cls += ' today';
+    if (isSel)      cls += ' selected';
+    if (hasAppt)    cls += ' has-appt';
+    const label = `${d} de ${MONTHS[viewMonth]}${isToday?', hoje':''}${hasAppt?', tem agendamento':''}`;
+    html += `<div class="${cls}" role="gridcell" aria-label="${label}"
+      onclick="${isDisabled?'':('selectDay(\''+key+'\')')}">${d}</div>`;
+  }
+  grid.innerHTML = html;
+}
+
+function renderTimes() {
+  const sec = document.getElementById('timeSection');
+  if (!selectedDateStr) { sec.style.display = 'none'; return; }
+  sec.style.display = 'block';
+  const [y,m,d] = selectedDateStr.split('-');
+  document.getElementById('timeSectionLabel').textContent = `Horários — ${d}/${m}/${y}`;
+  document.getElementById('dateDisplay').textContent = `📅 ${d}/${m}/${y}`;
+  document.getElementById('dateDisplay').classList.remove('empty');
+  const taken = takenSlots(selectedDateStr);
+  document.getElementById('timeGrid').innerHTML = HOURS.map(h => {
+    const isTaken = taken.includes(h);
+    const isSel   = h === selectedTime;
+    let cls = 'time-slot' + (isTaken?' taken':'') + (isSel?' selected':'');
+    return `<div class="${cls}" role="option" aria-selected="${isSel}"
+      onclick="${isTaken?'':('selectTime(\''+h+'\')')}">${h}</div>`;
+  }).join('');
+}
+
+function renderAgenda() {
+  const list     = document.getElementById('agendaList');
+  const todayStr = today();
+  const query    = document.getElementById('searchInput').value.toLowerCase();
+  let filtered   = [...appointments].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+  if (currentFilter==='today')    filtered = filtered.filter(a=>a.date===todayStr);
+  else if (currentFilter==='upcoming') filtered = filtered.filter(a=>a.date>=todayStr);
+  else if (currentFilter==='past')     filtered = filtered.filter(a=>a.date<todayStr);
+  if (query) filtered = filtered.filter(a=>
+    a.name.toLowerCase().includes(query)||a.vehicle.toLowerCase().includes(query));
+  if (!filtered.length) {
+    list.innerHTML = `<div class="empty-state"><div class="emoji">🗓️</div>
+      <p>${query||currentFilter!=='all'?'Nenhum agendamento encontrado.':'Nenhum agendamento ainda.<br>Use o formulário ao lado para criar o primeiro.'}</p></div>`;
+    return;
+  }
+  list.innerHTML = filtered.map(a => {
+    const [y,m,d] = a.date.split('-');
+    const past    = a.date < todayStr;
+    return `
+    <article class="agenda-item" style="${past?'opacity:.5':''}" aria-label="Agendamento de ${a.name}">
+      <div class="agenda-date-box" aria-hidden="true">
+        <div class="day">${d}</div>
+        <div class="month">${MONTHS_SHORT[parseInt(m)-1]}</div>
+      </div>
+      <div class="agenda-info">
+        <div class="agenda-name">${escapeHtml(a.name)}</div>
+        <div class="agenda-detail">
+          <span class="chip">🕐 ${a.time}</span>
+          <span>${escapeHtml(a.vehicle)}</span>
+          <span style="color:var(--accent2)">• ${escapeHtml(a.service)}</span>
+          ${a.phone?`<span>${escapeHtml(a.phone)}</span>`:''}
+        </div>
+        ${a.obs?`<div style="font-size:11px;color:var(--muted);margin-top:4px">${escapeHtml(a.obs)}</div>`:''}
+      </div>
+      <div class="agenda-actions">
+        <button class="icon-btn edit" onclick="openEdit('${a.id}')" aria-label="Editar agendamento de ${escapeHtml(a.name)}">✏️</button>
+        <button class="icon-btn del"  onclick="confirmDelete('${a.id}')" aria-label="Excluir agendamento de ${escapeHtml(a.name)}">🗑️</button>
+      </div>
+    </article>`;
+  }).join('');
+}
+
+function renderAll() { renderStats(); renderCalendar(); renderTimes(); renderAgenda(); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONTROLLER
+   ═══════════════════════════════════════════════════════════════════════════ */
+function changeMonth(dir) {
+  viewMonth += dir;
+  if (viewMonth < 0)  { viewMonth = 11; viewYear--; }
+  if (viewMonth > 11) { viewMonth = 0;  viewYear++; }
+  renderCalendar(); renderStats();
+}
+
+function selectDay(key) {
+  selectedDateStr = key; selectedTime = null;
+  document.getElementById('timeDisplay').textContent = 'Selecione o horário';
+  document.getElementById('timeDisplay').classList.add('empty');
+  renderCalendar(); renderTimes();
+}
+
+function selectTime(h) {
+  selectedTime = h;
+  document.getElementById('timeDisplay').textContent = `🕐 ${h}`;
+  document.getElementById('timeDisplay').classList.remove('empty');
+  renderTimes();
+}
+
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderAgenda();
+}
+
+/* ─── FORM ─────────────────────────────────────────────────────────────── */
+function clearFormErrors() {
+  ['errName','errVehicle','errService'].forEach(id=>document.getElementById(id).classList.remove('show'));
+  ['clientName','clientVehicle','serviceType'].forEach(id=>document.getElementById(id).classList.remove('invalid'));
+}
+
+function validateForm() {
+  clearFormErrors();
+  let ok = true;
+  const name    = document.getElementById('clientName').value.trim();
+  const vehicle = document.getElementById('clientVehicle').value.trim();
+  const service = document.getElementById('serviceType').value;
+  const phone   = document.getElementById('clientPhone').value.trim();
+  if (!selectedDateStr) { toast('Selecione uma data no calendário.','error'); ok=false; }
+  if (!selectedTime)    { toast('Selecione um horário.','error'); ok=false; }
+  if (!name)    { document.getElementById('clientName').classList.add('invalid'); document.getElementById('errName').classList.add('show'); ok=false; }
+  if (!vehicle) { document.getElementById('clientVehicle').classList.add('invalid'); document.getElementById('errVehicle').classList.add('show'); ok=false; }
+  if (!service) { document.getElementById('serviceType').classList.add('invalid'); document.getElementById('errService').classList.add('show'); ok=false; }
+  if (phone!==''&&!isValidPhone(phone)) { toast('Formato de telefone inválido. Use (XX) 9XXXX-XXXX','error'); ok=false; }
+  return ok;
+}
+
+async function submitForm() {
+  if (!validateForm()) return;
+  setBtnLoading('submitBtn','submitSpinner','submitBtnText', true, 'SALVANDO...');
+  try {
+    const body = {
+      date: selectedDateStr, time: selectedTime,
+      name: document.getElementById('clientName').value.trim(),
+      phone: document.getElementById('clientPhone').value.trim(),
+      vehicle: document.getElementById('clientVehicle').value.trim(),
+      service: document.getElementById('serviceType').value,
+      obs: document.getElementById('obsField').value.trim()
+    };
+    const data = await apiMutate('POST', '/appointments', body);
+    if (data.appt) {
+      appointments.push(data.appt);
+      toast('Agendamento realizado com sucesso!');
+      clearAllFormFields();
+      renderAll();
+    } else {
+      toast(data.msg || 'Erro ao criar agendamento.', 'error');
+    }
+  } catch {
+    toast('Erro ao conectar com o servidor.', 'error');
+  } finally {
+    setBtnLoading('submitBtn','submitSpinner','submitBtnText', false, 'CONFIRMAR AGENDAMENTO');
+  }
+}
+
+function clearAllFormFields() {
+  selectedDateStr = null; selectedTime = null;
+  ['clientName','clientPhone','clientVehicle','obsField'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('serviceType').value = '';
+  document.getElementById('dateDisplay').textContent = 'Clique em um dia no calendário';
+  document.getElementById('dateDisplay').classList.add('empty');
+  document.getElementById('timeDisplay').textContent = 'Selecione o horário';
+  document.getElementById('timeDisplay').classList.add('empty');
+  document.getElementById('timeSection').style.display = 'none';
+  clearFormErrors();
+}
+
+/* ─── DELETE ────────────────────────────────────────────────────────────── */
+function confirmDelete(id) {
+  pendingDeleteId = id;
+  document.getElementById('confirmModal').classList.add('open');
+}
+
+function closeConfirmModal() {
+  pendingDeleteId = null;
+  document.getElementById('confirmModal').classList.remove('open');
+}
+
+document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+  if (!pendingDeleteId) return;
+  try {
+    await apiMutate('DELETE', `/appointments/${pendingDeleteId}`);
+    appointments = appointments.filter(a => a.id !== pendingDeleteId);
+    toast('Agendamento excluído.');
+    renderAll();
+  } catch {
+    toast('Erro ao excluir.', 'error');
+  } finally {
+    closeConfirmModal();
+  }
+});
+
+/* ─── EDIT ──────────────────────────────────────────────────────────────── */
+function openEdit(id) {
+  const a = appointments.find(x => x.id === id);
+  if (!a) return;
+  editingId = id; editSelectedTime = a.time;
+  const [y,m,d] = a.date.split('-');
+  document.getElementById('editDateDisplay').textContent = `📅 ${d}/${m}/${y}`;
+  document.getElementById('editName').value    = a.name;
+  document.getElementById('editPhone').value   = a.phone || '';
+  document.getElementById('editVehicle').value = a.vehicle;
+  document.getElementById('editService').value = a.service;
+  document.getElementById('editObs').value     = a.obs || '';
+  renderEditTimes(a.date);
+  document.getElementById('editModal').classList.add('open');
+}
+
+function renderEditTimes(dateStr) {
+  const taken = takenSlots(dateStr, editingId);
+  document.getElementById('editTimeGrid').innerHTML = HOURS.map(h => {
+    const isTaken = taken.includes(h);
+    const isSel   = h === editSelectedTime;
+    let cls = 'time-slot' + (isTaken?' taken':'') + (isSel?' selected':'');
+    return `<div class="${cls}" role="option" aria-selected="${isSel}"
+      onclick="${isTaken?'':('pickEditTime(\''+h+'\')')}">${h}</div>`;
+  }).join('');
+}
+
+function pickEditTime(h) {
+  editSelectedTime = h;
+  const a = appointments.find(x => x.id === editingId);
+  if (a) renderEditTimes(a.date);
+}
+
+async function saveEdit() {
+  const name    = document.getElementById('editName').value.trim();
+  const vehicle = document.getElementById('editVehicle').value.trim();
+  const service = document.getElementById('editService').value;
+  const phone   = document.getElementById('editPhone').value.trim();
+  ['editErrName','editErrVehicle','editErrService'].forEach(id=>document.getElementById(id).classList.remove('show'));
+  let ok = true;
+  if (!name)    { document.getElementById('editErrName').classList.add('show'); ok=false; }
+  if (!vehicle) { document.getElementById('editErrVehicle').classList.add('show'); ok=false; }
+  if (!service) { document.getElementById('editErrService').classList.add('show'); ok=false; }
+  if (phone!==''&&!isValidPhone(phone)) { toast('Formato de telefone inválido. Use (XX) 9XXXX-XXXX','error'); ok=false; }
+  if (!ok) return;
+
+  // CORREÇÃO: aponta para os IDs corretos do modal de edição
+  setBtnLoading('saveEditBtn','saveSpinner','saveBtnText', true, 'SALVANDO...');
+  try {
+    const a = appointments.find(x => x.id === editingId);
+    if (!a) return;
+    const body = { date: a.date, time: editSelectedTime, name, phone, vehicle, service, obs: document.getElementById('editObs').value.trim() };
+    const data = await apiMutate('PUT', `/appointments/${editingId}`, body);
+    if (data.appt) {
+      Object.assign(a, data.appt);
+      toast('Agendamento atualizado!');
+      closeModal();
+      renderAll();
+    } else {
+      toast(data.msg || 'Erro ao atualizar.', 'error');
+    }
+  } catch {
+    toast('Erro ao conectar com o servidor.', 'error');
+  } finally {
+    setBtnLoading('saveEditBtn','saveSpinner','saveBtnText', false, 'SALVAR');
+  }
+}
+
+function closeModal() {
+  document.getElementById('editModal').classList.remove('open');
+  editingId = null; editSelectedTime = null;
+  ['editErrName','editErrVehicle','editErrService'].forEach(id=>document.getElementById(id).classList.remove('show'));
+}
+
+function cancelEdit() {
+  editingId = null;
+  document.getElementById('formTitle').textContent = 'Novo Agendamento';
+  document.getElementById('submitBtnText').textContent = 'CONFIRMAR AGENDAMENTO';
+  document.getElementById('cancelEditBtn').style.display = 'none';
+  clearAllFormFields(); renderAll();
+}
+
+/* ─── PHONE MASK ────────────────────────────────────────────────────────── */
+function phoneMask(e) {
+  let v = e.target.value.replace(/\D/g,'').slice(0,11);
+  if (v.length > 6)      v = `(${v.slice(0,2)}) ${v.slice(2,7)}-${v.slice(7)}`;
+  else if (v.length > 2) v = `(${v.slice(0,2)}) ${v.slice(2)}`;
+  else if (v.length)     v = `(${v}`;
+  e.target.value = v;
+}
+['clientPhone','editPhone'].forEach(id => document.getElementById(id).addEventListener('input', phoneMask));
+
+/* ─── FECHAR MODAIS ─────────────────────────────────────────────────────── */
+document.getElementById('editModal').addEventListener('click', e=>{ if(e.target===e.currentTarget) closeModal(); });
+document.getElementById('confirmModal').addEventListener('click', e=>{ if(e.target===e.currentTarget) closeConfirmModal(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){closeModal();closeConfirmModal();} });
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BOOT — verifica sessão existente
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function boot() {
+  const session = Session.get();
+  if (session) initApp(session);
+})();
+</script>
+</body>
+</html>

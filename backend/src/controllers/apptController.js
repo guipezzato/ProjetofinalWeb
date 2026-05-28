@@ -1,6 +1,6 @@
 const Storage = require('../models/storage');
 
-const ApptController = {
+async register(req, res) {
   getAll(req, res) {
     try {
       const userId = req.headers['user-id']; // Identifica qual usuário está pedindo os dados

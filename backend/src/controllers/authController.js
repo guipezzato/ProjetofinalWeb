@@ -1,7 +1,7 @@
 const Storage = require('../models/storage');
 
 const AuthController = {
-  register(req, res) {
+  async register(req, res) {
     try {
       const { name, email, password } = req.body;
 

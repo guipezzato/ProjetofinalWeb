@@ -8,5 +8,5 @@ router.post('/', ApptController.create);
 router.put('/:id', ApptController.update);
 router.delete('/:id', ApptController.delete);
 
-// Força a exportação do roteador do Express (Isso evita o objeto vazio)
+// Força a exportação do roteador do Express
 module.exports = router;

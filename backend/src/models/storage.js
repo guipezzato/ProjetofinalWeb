@@ -9,12 +9,12 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-// Inicializa os arquivos caso não existam
+
 if (!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, '[]', 'utf-8');
 if (!fs.existsSync(APPTS_FILE)) fs.writeFileSync(APPTS_FILE, '[]', 'utf-8');
 
 const Storage = {
-  // ── Usuários ──────────────────────────────────────────────────────────────
+ 
   getUsers() {
     try {
       return JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8'));
@@ -27,7 +27,7 @@ const Storage = {
     fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
   },
 
-  // ── Agendamentos ──────────────────────────────────────────────────────────
+  
   getAppts() {
     try {
       return JSON.parse(fs.readFileSync(APPTS_FILE, 'utf-8'));

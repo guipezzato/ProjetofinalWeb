@@ -11,13 +11,13 @@ const AuthController = {
 
       const users = Storage.getUsers();
       
-      // Verifica se o e-mail já está cadastrado
+      
       const userExists = users.find(u => u.email === email);
       if (userExists) {
         return res.status(400).json({ msg: 'Este e-mail já está cadastrado.' });
       }
 
-      // Cria o novo usuário
+      
       const newUser = { id: Date.now().toString(), name, email, password };
       users.push(newUser);
       Storage.saveUsers(users);
@@ -43,7 +43,7 @@ const AuthController = {
         return res.status(401).json({ msg: 'E-mail ou senha incorretos.' });
       }
 
-      // Retorna os dados do usuário para o Front-end salvar a sessão
+      
       return res.status(200).json({
         msg: 'Login realizado com sucesso!',
         session: { id: user.id, name: user.name, email: user.email }

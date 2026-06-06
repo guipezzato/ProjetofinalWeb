@@ -7,20 +7,16 @@ const apptRoutes = require('./routes/apptRoutes');
 
 const app = express();
 
-// Middlewares
 app.use(cors()); 
 app.use(express.json()); 
 
-// Rotas da API
 app.use('/api/auth', authRoutes);
 app.use('/api/appointments', apptRoutes);
 
-// Rota de teste simples
 app.get('/', (req, res) => {
   res.send('API da Oficina AutoFix funcionando perfeitamente! 🚀');
 });
 
-// Porta do .env ou 3000
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {

@@ -3,11 +3,11 @@ const Storage = require('../models/storage');
 async register(req, res) {
   getAll(req, res) {
     try {
-      const userId = req.headers['user-id']; // Identifica qual usuário está pedindo os dados
+      const userId = req.headers['user-id']; // 
       if (!userId) return res.status(401).json({ msg: 'Não autorizado.' });
 
       const allAppts = Storage.getAppts();
-      // Filtra para enviar apenas os agendamentos pertencentes a este usuário
+      
       const userAppts = allAppts.filter(a => a.userId === userId);
 
       return res.status(200).json(userAppts);
@@ -25,7 +25,7 @@ async register(req, res) {
 
       const newAppt = {
         id: Date.now().toString(),
-        userId, // Vincula o agendamento ao usuário logado
+        userId, 
         date, time, name, phone, vehicle, service, obs
       };
 
